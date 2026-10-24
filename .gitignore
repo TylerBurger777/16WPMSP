@@ -1,0 +1,11 @@
+/build/
+/external/
+bench_16wpmsp
+bench_iso_16wpmsp
+bench_iso_ips4o
+bench_iso_vqsort
+bench_iso_tbb
+stress_16wpmsp
+*.o
+*.out
+*.bak
