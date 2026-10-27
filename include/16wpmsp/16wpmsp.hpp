@@ -457,7 +457,6 @@ bool has_int_max_or_min(const int* a, int n, int) {
 // ADAPTIVITY
 // ============================================================================
 inline int compute_adaptive_th(int n, int num_threads) {
-    // Для тестов можно переопределить через переменную окружения
     const char* env = std::getenv("WPMSP_FORCE_TH");
     if (env) return std::atoi(env);
 
@@ -465,8 +464,10 @@ inline int compute_adaptive_th(int n, int num_threads) {
 
     // Ступенчатая функция, найденная эмпирически на Zen 5:
     if (per_thread <= 100000) return 100000; // Весь чанк уходит в qi
-    if (per_thread <= 250000) return 96000;  // Оптимум для средних чанков (N ~ 3.2M)
-    return 24000;                            // Оптимум для больших данных (N >= 6.4M)
+    if (per_thread <= 250000) return 96000;  // Оптимум для 3.2M (L2 cache)
+    if (per_thread <= 4000000) return 24000; // Оптимум для 16M-64M
+    if (per_thread <= 8000000) return 48000; // Оптимум для 128M
+    return 96000;                            // Оптимум для 256M+ (магия числа 166)
 }
 inline int pick_K_eff(int n, int K_max) {
     if (K_max <= 2) return (n < 1000000) ? 1 : K_max;

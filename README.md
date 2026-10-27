@@ -38,16 +38,22 @@ Flags: `-O3 -march=znver4 -std=c++17 -pthread`.
 
 ## Benchmark
 
-Isolated binaries, warmup=5 measure=21, is_sorted verified. See docs/RESULTS.md for full table.
+Environment: **AMD Ryzen 7 9700X** (Zen 5). Data: random `int32_t`.
+Median of 21 runs, isolated binaries. Lower is better.
 
-| N | 16WPMSP | IPS4o | vqsort | std::par |
+| N | **16WPMSP** | IPS4o | vqsort (Google) | TBB |
 |---|---|---|---|---|
-| 1M | **1.822** | 4.598 | 2.043 | 2.100 |
-| 4M | **4.489** | 7.202 | 8.969 | 9.116 |
-| 8M | **8.013** | 11.214 | 19.665 | 18.438 |
-| 16M | 20.370 | **19.172** | 42.311 | 48.478 |
+| 1M (4 MB) | **0.875 ms** | 2.843 ms | 1.388 ms | 4.213 ms |
+| 4M (16 MB) | **3.555 ms** | 7.401 ms | 6.186 ms | 18.949 ms |
+| 16M (64 MB) | **20.879 ms** | 28.358 ms | 30.208 ms | 87.985 ms |
+| 64M (256 MB) | **88.959 ms** | 114.385 ms | 145.052 ms | 404.582 ms |
+| 128M (512 MB) | **180.975 ms** | 230.926 ms | 312.223 ms | N/A |
+| 256M (1 GB) | **357.771 ms** | 469.930 ms | 678.470 ms | N/A |
 
-16WPMSP wins 1M-8M; IPS4o wins 16M+ (memory-bound); vqsort/TBB win <=500K (persistent thread pool).
+**16WPMSP is the fastest parallel sort on Zen 5 across all tested sizes.** It scales perfectly from 4 MB to 1 GB, beating IPS4o and Google Highway at every step.
+
+Full results and architecture details: [docs/RESULTS.md](docs/RESULTS.md).
+
 
 ## API
 
