@@ -9,3 +9,9 @@ stress_16wpmsp
 *.o
 *.out
 *.bak
+temp_qi/
+temp_quill/
+bench_iso_*
+bench_final
+bench_std
+bench_pool

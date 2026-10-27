@@ -1,4 +1,6 @@
 #pragma once
+#include "16wpmsp/thread_pool.hpp"
+#include "16wpmsp/third_party/qi_radix.hpp"
 // 16WPMSP — 16-Way Partitioned Merge Sort Parallel (header-only)
 
 // ============================================================================
@@ -294,10 +296,18 @@ void merge16_threshold_fast(int* out, const int* const* runs, int* lengths, int 
     }
     _mm_free(flat); _mm_free(temp);
 }
+
+void radix_sort_i32_qi(int* a, int* tmp, int n) {
+    uint32_t* enc = (uint32_t*)tmp;
+    for (int i = 0; i < n; ++i) enc[i] = (uint32_t)(a[i]) ^ 0x80000000;
+    qi::radix_11(enc, n);
+    for (int i = 0; i < n; ++i) a[i] = (int)(enc[i] ^ 0x80000000);
+}
+
 void sort_local_16wpmsp(int* a, int* buf, int n, int th) {
     if (n <= 32) { std::sort(a, a+n); return; }
     int* src = a; int* dst = buf;
-    for (int i = 0; i < n; i += th) { int e = std::min(i+th,n); radix_sort_i32(src+i, dst+i, e-i); }
+    for (int i = 0; i < n; i += th) { int e = std::min(i+th,n); radix_sort_i32_qi(src+i, dst+i, e-i); }
     int rs = th;
     while (rs < n) {
         int step = rs * RUNS_COUNT;
@@ -386,6 +396,21 @@ void parallel_16way_slab(int* in_block, int* out_block, int total, int cs, int n
         std::memcpy(out_block, in_block, (size_t)total * sizeof(int));
         return;
     }
+#ifdef USE_THREAD_POOL
+    wpmsp::ThreadPool::instance().parallel_for(0, nslabs, [&](int s) {
+        int sz = (int)(slab_off[s+1] - slab_off[s]);
+        if (sz <= 0) return;
+        int* out_slab = out_block + slab_off[s];
+        const int* runs[16]; int lens[16]; int cnt = 0;
+        for (int r = 0; r < 16; ++r) {
+            int lo = pieces[s][r].first, hi = pieces[s][r].second;
+            if (hi > lo) { runs[cnt] = in_block + r*cs + lo; lens[cnt] = hi - lo; cnt++; }
+        }
+        for (int r = cnt; r < 16; ++r) { runs[r] = nullptr; lens[r] = 0; }
+        if (cnt == 1) std::memcpy(out_slab, runs[0], lens[0]*4);
+        else merge16_threshold_fast(out_slab, runs, lens, sz, FIXED_BUF_SIZE);
+    });
+#else
     std::vector<std::thread> workers;
     for (int s = 0; s < nslabs; ++s) {
         int sz = (int)(slab_off[s+1] - slab_off[s]);
@@ -403,6 +428,7 @@ void parallel_16way_slab(int* in_block, int* out_block, int total, int cs, int n
         });
     }
     for (auto& w : workers) w.join();
+#endif
 }
 bool has_int_max_or_min(const int* a, int n, int) {
     __m512i vmax = _mm512_set1_epi32(INT_MAX);
@@ -431,8 +457,16 @@ bool has_int_max_or_min(const int* a, int n, int) {
 // ADAPTIVITY
 // ============================================================================
 inline int compute_adaptive_th(int n, int num_threads) {
+    // Для тестов можно переопределить через переменную окружения
+    const char* env = std::getenv("WPMSP_FORCE_TH");
+    if (env) return std::atoi(env);
+
     int per_thread = (n + num_threads - 1) / num_threads;
-    return std::clamp(per_thread / TH_DIVISOR, TH_FLOOR, TH_CAP);
+
+    // Ступенчатая функция, найденная эмпирически на Zen 5:
+    if (per_thread <= 100000) return 100000; // Весь чанк уходит в qi
+    if (per_thread <= 250000) return 96000;  // Оптимум для средних чанков (N ~ 3.2M)
+    return 24000;                            // Оптимум для больших данных (N >= 6.4M)
 }
 inline int pick_K_eff(int n, int K_max) {
     if (K_max <= 2) return (n < 1000000) ? 1 : K_max;
@@ -473,6 +507,12 @@ void parallel_16wpmsp_sort(int* a, int* scratch, int n, int num_threads, double&
     int cs = (n + K_eff - 1) / K_eff;
 
     auto t0 = Clock::now();
+#ifdef USE_THREAD_POOL
+    wpmsp::ThreadPool::instance().parallel_for(0, K_eff, [&](int t) {
+        int off = t * cs, len = std::min(cs, n - off);
+        if (len > 0) sort_local_16wpmsp(a + off, scratch + off, len, th);
+    });
+#else
     {
         std::vector<std::thread> workers;
         for (int t = 0; t < K_eff; ++t) {
@@ -484,6 +524,7 @@ void parallel_16wpmsp_sort(int* a, int* scratch, int n, int num_threads, double&
         }
         for (auto& w : workers) w.join();
     }
+#endif
     auto t1 = Clock::now();
     p1_ms = duration<double, std::milli>(t1-t0).count();
 
@@ -503,7 +544,10 @@ void parallel_16wpmsp_sort(int* a, int* scratch, int n, int num_threads, double&
     int group_size = 16 * cs;
     int G = (n + group_size - 1) / group_size;
 
-    {
+    if (G == 1) {
+        // Fast path: single group, no outer spawn, use pool inside
+        parallel_16way_slab(a, scratch, n, cs, nslabs);
+    } else {
         std::vector<std::thread> workers;
         for (int g = 0; g < G; ++g) {
             int start = g * group_size;

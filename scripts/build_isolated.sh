@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CXX=${CXX:-g++}
-BASE="-O3 -march=znver4 -std=c++17 -pthread -Iinclude"
+BASE="-O3 -march=native -std=c++17 -pthread -Iinclude"
 [ -f external/ips4o/include/ips4o.hpp ]             && BASE="$BASE -Iexternal/ips4o/include"
 [ -f external/highway/hwy/contrib/sort/vqsort.h ]   && BASE="$BASE -Iexternal/highway"
 

@@ -1,0 +1,38 @@
+[build-system]
+requires      = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name            = "quill-fastsort-simd"
+version         = "0.2.0"
+description     = "Single-threaded radix sort backend (simd_companion API) for quill-sort — portable C++ build for macOS, Linux and Windows."
+readme          = "README.md"
+license         = { text = "MIT" }
+authors         = [{ name = "Isaiah Tucker" }]
+requires-python = ">=3.8"
+dependencies    = ["numpy>=1.21"]
+keywords        = ["sorting", "radix sort", "simd", "quill", "quill-sort"]
+classifiers = [
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
+]
+
+[tool.setuptools]
+packages = ["quill_fastsort_simd"]
+
+# cibuildwheel: produce macOS (arm64+x86_64) and Linux (x86_64+aarch64) wheels in
+# CI. The extension is header-only C++17, so no per-wheel system deps are needed.
+[tool.cibuildwheel]
+build = "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-*"
+skip  = "*-musllinux_i686 *_i686 pp*"
+
+[tool.cibuildwheel.macos]
+archs = ["arm64", "x86_64"]
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64", "aarch64"]

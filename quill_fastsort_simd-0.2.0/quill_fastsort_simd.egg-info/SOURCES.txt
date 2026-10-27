@@ -1,0 +1,12 @@
+MANIFEST.in
+README.md
+pyproject.toml
+setup.py
+quill_fastsort_simd/__init__.py
+quill_fastsort_simd.egg-info/PKG-INFO
+quill_fastsort_simd.egg-info/SOURCES.txt
+quill_fastsort_simd.egg-info/dependency_links.txt
+quill_fastsort_simd.egg-info/requires.txt
+quill_fastsort_simd.egg-info/top_level.txt
+src/_impl.cpp
+src/quill_core.hpp
